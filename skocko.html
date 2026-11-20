@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skočko</title>
+<style>
+  * {
+    box-sizing: border-box;
+    border-radius: 0px !important;
+    user-select: none;
+  }
+
+  body {
+    margin: 0;
+    background: #071b07;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #ffffff;
+  }
+
+  .board {
+    position: relative;
+    width: min(96vw, 720px);
+    aspect-ratio: 720 / 576;
+    background: url("grafika.svg") center / 100% 100% no-repeat;
+    border: 2px solid #000000;
+  }
+
+  /* Tajmer: osa X = 311.205px, W = 17.27px, Y = 214.955px, H = 334.73px */
+  .timer-track {
+    position: absolute;
+    left: 42.023333%;
+    top: 37.318576%;
+    width: 2.398611%;
+    height: 58.112847%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .timer-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 0%;
+    background: #ffd400;
+    transition: height 0.08s steps(1, end);
+  }
+
+  /* Kockice / simboli (pokušaji i rešenje) */
+  .guess-slot,
+  .secret-slot {
+    position: absolute;
+    width: 6.4%;
+    height: 8.6%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .secret-slot {
+    cursor: default;
+  }
+
+  /* Tačne X ose: 72.63, 128.815, 184.995, 241.175 / 720 */
+  .col-0 { left: 10.087500%; }
+  .col-1 { left: 17.890972%; }
+  .col-2 { left: 25.693750%; }
+  .col-3 { left: 33.496528%; }
+
+  /* Tačne Y ose za 6 redova pokušaja */
+  .guess-slot.row-0 { top: 12.062500%; }
+  .guess-slot.row-1 { top: 22.164931%; }
+  .guess-slot.row-2 { top: 32.267361%; }
+  .guess-slot.row-3 { top: 42.369792%; }
+  .guess-slot.row-4 { top: 52.472222%; }
+  .guess-slot.row-5 { top: 62.574653%; }
+
+  /* Tačne Y ose za 2 reda rešenja (448.24px i 506.43px / 576) */
+  .secret-r0 .secret-slot { top: 77.819444%; }
+  .secret-r1 .secret-slot { top: 87.921875%; }
+
+  .guess-slot img,
+  .secret-slot img {
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  /* 4 kružića za pogodak — 45.292px x 45.292px */
+  .peg-slot {
+    position: absolute;
+    width: 6.290555%;
+    aspect-ratio: 1 / 1;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Tačne X ose (373.343, 422.248, 471.153, 520.057 / 720) */
+  .peg-col-0 { left: 51.853194%; }
+  .peg-col-1 { left: 58.645556%; }
+  .peg-col-2 { left: 65.437917%; }
+  .peg-col-3 { left: 72.230139%; }
+
+  /* Tačne Y ose (68.521, 128.426, 186.757, 244.806, 302.996, 359.471 / 576) */
+  .peg-row-0 { top: 11.896007%; }
+  .peg-row-1 { top: 22.296181%; }
+  .peg-row-2 { top: 32.423090%; }
+  .peg-row-3 { top: 42.501042%; }
+  .peg-row-4 { top: 52.603472%; }
+  .peg-row-5 { top: 62.408160%; }
+
+  .peg {
+    width: 100%;
+    height: 100%;
+    border-radius: 50% !important;
+    background: transparent;
+  }
+  .peg.red {
+    background: #ff0000;
+  }
+  .peg.yellow {
+    background: #ffd400;
+  }
+
+  /* Klikabilni simboli na donjoj zelenoj traci */
+  .picker-btn {
+    position: absolute;
+    top: 72.0%;
+    height: 18.0%;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  .picker-btn:hover {
+    outline: 2px solid #ffffff;
+  }
+  .p-skocko { left: 45.2%; width: 7.8%; }
+  .p-tref   { left: 53.3%; width: 7.6%; }
+  .p-pik    { left: 61.2%; width: 7.6%; }
+  .p-herc   { left: 69.1%; width: 7.6%; }
+  .p-karo   { left: 77.0%; width: 7.2%; }
+  .p-zvezda { left: 84.5%; width: 7.8%; }
+
+  /* Desni okvir — X=620.22px, W=89.42px, H=50.33px, bez pozadine, ćirilični Arial */
+  .box-red, .box-blue {
+    position: absolute;
+    left: 86.141667%;
+    width: 12.419444%;
+    height: 8.737847%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    font-size: clamp(9px, 1.45vw, 12px);
+    background: transparent;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  /* Gornji (crveni) okvir -> НОВА ИГРА ultra svetlo crvenom */
+  .box-red {
+    top: 49.969618%;
+    color: #ffccd5;
+  }
+
+  /* Donji (plavi) okvir -> ПОТВРДИ ULTRA SVETLO PLAVOM */
+  .box-blue {
+    top: 60.641493%;
+    color: #cce5ff;
+  }
+</style>
+</head>
+<body>
+
+<div class="board" id="board">
+  <div class="timer-track">
+    <div class="timer-bar" id="timerBar"></div>
+  </div>
+
+  <div id="guessesLayer"></div>
+  <div id="pegsLayer"></div>
+
+  <div id="secretRow0"></div>
+  <div id="secretRow1"></div>
+
+  <button class="picker-btn p-skocko" title="Скочко" onclick="addSymbol('skocko')"></button>
+  <button class="picker-btn p-tref"   title="Треф"   onclick="addSymbol('tref')"></button>
+  <button class="picker-btn p-pik"    title="Пик"    onclick="addSymbol('pik')"></button>
+  <button class="picker-btn p-herc"   title="Херц"   onclick="addSymbol('herc')"></button>
+  <button class="picker-btn p-karo"   title="Каро"   onclick="addSymbol('karo')"></button>
+  <button class="picker-btn p-zvezda" title="Звезда" onclick="addSymbol('zvezda')"></button>
+
+  <div class="box-red"  id="newGameBox" onclick="newGame()"  title="Нова игра">НОВА ИГРА</div>
+  <div class="box-blue" id="confirmBox" onclick="checkRow()" title="Потврди ред">ПОТВРДИ</div>
+</div>
+
+<script>
+  const SYMBOLS = [
+    { id: 'skocko', src: 'skocko.svg', alt: 'Скочко' },
+    { id: 'tref',   src: 'tref.svg',   alt: 'Треф' },
+    { id: 'pik',    src: 'pik.svg',    alt: 'Пик' },
+    { id: 'herc',   src: 'herc.svg',   alt: 'Херц' },
+    { id: 'karo',   src: 'karo.svg',   alt: 'Каро' },
+    { id: 'zvezda', src: 'zvezda.svg', alt: 'Звезда' }
+  ];
+
+  const MAX_ROWS = 6;
+  const COLS = 4;
+  const TOTAL_TIME = 60;
+
+  let secret = [];
+  let currentRow = 0;
+  let guesses = [];
+  let gameOver = false;
+
+  let timeLeft = TOTAL_TIME;
+  let timerStarted = false;
+  let timerInterval = null;
+
+  function getSymbolObj(id) {
+    return SYMBOLS.find(s => s.id === id);
+  }
+
+  function createSymbolImg(symObj) {
+    const img = document.createElement('img');
+    img.src = symObj.src;
+    img.alt = symObj.alt;
+    return img;
+  }
+
+  function updateTimerUI() {
+    const elapsed = TOTAL_TIME - timeLeft;
+    const pct = (elapsed / TOTAL_TIME) * 100;
+    document.getElementById('timerBar').style.height = `${pct}%`;
+  }
+
+  function stopTimer() {
+    if (timerInterval !== null) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function startTimerIfNeeded() {
+    if (timerStarted || gameOver) return;
+    timerStarted = true;
+    updateTimerUI();
+
+    timerInterval = setInterval(() => {
+      if (gameOver) {
+        stopTimer();
+        return;
+      }
+      timeLeft--;
+      if (timeLeft < 0) timeLeft = 0;
+      updateTimerUI();
+
+      if (timeLeft <= 0) {
+        stopTimer();
+        gameOver = true;
+        revealSecret();
+      }
+    }, 1000);
+  }
+
+  function buildBoard() {
+    const guessesLayer = document.getElementById('guessesLayer');
+    guessesLayer.innerHTML = '';
+    for (let rIdx = 0; rIdx < MAX_ROWS; rIdx++) {
+      for (let c = 0; c < COLS; c++) {
+        const slot = document.createElement('div');
+        slot.className = `guess-slot row-${rIdx} col-${c}`;
+        slot.dataset.row = rIdx;
+        slot.dataset.col = c;
+        slot.onclick = () => clearSlot(rIdx, c);
+        guessesLayer.appendChild(slot);
+      }
+    }
+
+    const pegsLayer = document.getElementById('pegsLayer');
+    pegsLayer.innerHTML = '';
+    for (let rIdx = 0; rIdx < MAX_ROWS; rIdx++) {
+      for (let c = 0; c < COLS; c++) {
+        const pegWrap = document.createElement('div');
+        pegWrap.className = `peg-slot peg-row-${rIdx} peg-col-${c}`;
+        const peg = document.createElement('div');
+        peg.className = 'peg';
+        peg.dataset.row = rIdx;
+        peg.dataset.peg = c;
+        pegWrap.appendChild(peg);
+        pegsLayer.appendChild(pegWrap);
+      }
+    }
+
+    const s0 = document.getElementById('secretRow0');
+    const s1 = document.getElementById('secretRow1');
+    s0.className = 'secret-r0';
+    s1.className = 'secret-r1';
+    s0.innerHTML = '';
+    s1.innerHTML = '';
+    for (let c = 0; c < COLS; c++) {
+      const slot0 = document.createElement('div');
+      slot0.className = `secret-slot col-${c}`;
+      slot0.dataset.sec = c;
+      s0.appendChild(slot0);
+
+      const slot1 = document.createElement('div');
+      slot1.className = `secret-slot col-${c}`;
+      slot1.dataset.sec = c;
+      s1.appendChild(slot1);
+    }
+  }
+
+  function newGame() {
+    stopTimer();
+    timeLeft = TOTAL_TIME;
+    timerStarted = false;
+    updateTimerUI();
+
+    secret = Array.from({ length: COLS }, () => {
+      const rand = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+      return rand.id;
+    });
+    currentRow = 0;
+    guesses = Array.from({ length: MAX_ROWS }, () => Array(COLS).fill(null));
+    gameOver = false;
+    buildBoard();
+  }
+
+  function addSymbol(symId) {
+    if (gameOver) return;
+    const rowArr = guesses[currentRow];
+    const emptyIdx = rowArr.findIndex(v => v === null);
+    if (emptyIdx === -1) return;
+    startTimerIfNeeded();
+    rowArr[emptyIdx] = symId;
+    renderRow(currentRow);
+  }
+
+  function clearSlot(rIdx, cIdx) {
+    if (gameOver || rIdx !== currentRow) return;
+    guesses[rIdx][cIdx] = null;
+    renderRow(rIdx);
+  }
+
+  function undoSymbol() {
+    if (gameOver) return;
+    const rowArr = guesses[currentRow];
+    for (let i = COLS - 1; i >= 0; i--) {
+      if (rowArr[i] !== null) {
+        rowArr[i] = null;
+        renderRow(currentRow);
+        return;
+      }
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      undoSymbol();
+    }
+  });
+
+  function renderRow(rIdx) {
+    const slots = document.querySelectorAll(`.guess-slot[data-row="${rIdx}"]`);
+    slots.forEach((slot, cIdx) => {
+      const symId = guesses[rIdx][cIdx];
+      slot.innerHTML = '';
+      if (symId) {
+        const s = getSymbolObj(symId);
+        slot.appendChild(createSymbolImg(s));
+      }
+    });
+  }
+
+  function evaluateGuess(guessArr, secretArr) {
+    let red = 0;
+    let yellow = 0;
+
+    const secretRem = [];
+    const guessRem = [];
+
+    for (let i = 0; i < COLS; i++) {
+      if (guessArr[i] === secretArr[i]) {
+        red++;
+      } else {
+        secretRem.push(secretArr[i]);
+        guessRem.push(guessArr[i]);
+      }
+    }
+
+    for (const g of guessRem) {
+      const idx = secretRem.indexOf(g);
+      if (idx !== -1) {
+        yellow++;
+        secretRem.splice(idx, 1);
+      }
+    }
+
+    return { red, yellow };
+  }
+
+  function renderPegs(rIdx, red, yellow) {
+    const pegs = document.querySelectorAll(`.peg[data-row="${rIdx}"]`);
+    pegs.forEach((peg, idx) => {
+      peg.className = 'peg';
+      if (idx < red) {
+        peg.classList.add('red');
+      } else if (idx < red + yellow) {
+        peg.classList.add('yellow');
+      }
+    });
+  }
+
+  function revealSecret() {
+    const slots0 = document.querySelectorAll('#secretRow0 .secret-slot');
+    const slots1 = document.querySelectorAll('#secretRow1 .secret-slot');
+    secret.forEach((symId, idx) => {
+      const s = getSymbolObj(symId);
+      slots0[idx].innerHTML = '';
+      slots0[idx].appendChild(createSymbolImg(s));
+      slots1[idx].innerHTML = '';
+      slots1[idx].appendChild(createSymbolImg(s));
+    });
+  }
+
+  function checkRow() {
+    if (gameOver) return;
+    const rowArr = guesses[currentRow];
+    if (rowArr.some(v => v === null)) return;
+
+    const { red, yellow } = evaluateGuess(rowArr, secret);
+    renderPegs(currentRow, red, yellow);
+
+    if (red === COLS) {
+      stopTimer();
+      gameOver = true;
+      revealSecret();
+      return;
+    }
+
+    currentRow++;
+    if (currentRow >= MAX_ROWS) {
+      stopTimer();
+      gameOver = true;
+      revealSecret();
+    }
+  }
+
+  newGame();
+</script>
+</body>
+</html>
